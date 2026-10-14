@@ -1,0 +1,29 @@
+NORTHWIND STUDIO
+Brand & Web Design
+18 Warpleaf Lane, Suite 4
+Portland, OR 97209
+hello@northwindstudio.example
++1 (503) 555-0142
+
+TAX INVOICE
+
+Invoice number: NS-2026-0917
+Invoice date: 2026-09-03
+Due date: 2026-10-03
+
+Billed to:
+M. Alvarez Freelance
+alvarez@example.com
+
+Description                         Qty    Unit price     Amount
+------------------------------------------------------------
+Brand identity retainer, Sept       1      1,800.00      1,800.00
+Landing page design, phase 2        1        600.00        600.00
+------------------------------------------------------------
+Subtotal                                                2,400.00
+Sales tax (0.00%)                                           0.00
+Total due (USD)                                         2,400.00
+
+Payment method: bank transfer
+Please reference invoice number NS-2026-0917 on all payments.
+Net 30. Thank you for your business.

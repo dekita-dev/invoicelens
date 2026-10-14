@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+report/
+*.gguf
+.DS_Store
+
+# Working draft of the dev.to submission article. Not part of the tool; the
+# published post lives on dev.to and links back here.
+docs/devto-submission.md

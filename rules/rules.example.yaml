@@ -1,0 +1,103 @@
+# Deductibility rules for InvoiceLens.
+#
+# This file is a starting point, not tax advice. Whether a cost is deductible
+# depends on your jurisdiction, your business form, and the tax year. Edit it
+# to match your own situation, or point --rules at your own file.
+#
+# Matching is keyword-based: the vendor name, line item descriptions, and the
+# model's notes field are lowercased and searched for each keyword. The
+# category with the most distinct keyword hits wins; ties go to the category
+# listed first. `deductible` may be true, false, or null (meaning "no
+# opinion — review manually").
+
+default:
+  deductible: null
+  note: "No rule matched. Review manually."
+
+categories:
+  - name: professional_services
+    label: Professional services (subcontractors, agencies)
+    keywords:
+      - consulting
+      - studio
+      - agency
+      - freelance
+      - design
+      - retainer
+    deductible: true
+    note: "Subcontractor and agency invoices are normally a business cost."
+
+  - name: software_subscriptions
+    label: Software subscriptions and SaaS
+    keywords:
+      - github
+      - figma
+      - adobe
+      - notion
+      - jetbrains
+      - slack
+      - saas
+      - subscription
+      - license
+    deductible: true
+    note: "Business software subscriptions are normally deductible."
+
+  - name: cloud_hosting
+    label: Cloud and hosting
+    keywords:
+      - cloudflare
+      - digitalocean
+      - aws
+      - hosting
+      - domain
+      - server
+    deductible: true
+    note: "Hosting and domain costs are normally deductible."
+
+  - name: office_supplies
+    label: Office supplies and equipment
+    keywords:
+      - office
+      - stationery
+      - supplies
+      - monitor
+      - keyboard
+      - furniture
+      - hardware
+    deductible: true
+    note: "Office equipment may be deductible or may need to be capitalized. Check locally."
+
+  - name: travel
+    label: Travel and transport
+    keywords:
+      - airline
+      - flight
+      - rail
+      - hotel
+      - taxi
+      - transit
+      - mileage
+    deductible: true
+    note: "Business travel is normally deductible; keep the business purpose on file."
+
+  - name: meals_entertainment
+    label: Meals and entertainment
+    keywords:
+      - restaurant
+      - cafe
+      - coffee
+      - catering
+      - meal
+    deductible: null
+    note: "Meals are often only partly deductible and entertainment often not at all. Review."
+
+  - name: personal
+    label: Personal (not a business cost)
+    keywords:
+      - grocery
+      - supermarket
+      - pharmacy
+      - clothing
+      - rent
+    deductible: false
+    note: "Looks personal. Excluded from business totals."

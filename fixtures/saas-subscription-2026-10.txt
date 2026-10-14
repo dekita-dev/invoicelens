@@ -1,0 +1,25 @@
+GITHUB, INC.
+88 Colin P Kelly Jr St
+San Francisco, CA 94107
+
+RECEIPT
+
+Receipt number: GH-7714-2026
+Date: 2026-10-02
+
+Account: m-alvarez-individual
+Plan: GitHub Team
+Billing period: monthly
+Seats: 1
+
+Description                                    Amount
+------------------------------------------------------
+GitHub Team subscription, October 2026      USD 4.00
+Additional Actions minutes (2,000)          USD 0.00
+------------------------------------------------------
+Subtotal                                    USD 4.00
+Tax (0.00%)                                 USD 0.00
+Total charged to Visa ending 4242           USD 4.00
+
+This is a recurring monthly subscription.
+Manage or cancel at github.com/settings/billing.
