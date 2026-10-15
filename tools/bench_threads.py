@@ -102,9 +102,17 @@ def main(argv=None):
             if not ok:
                 print("threads=%-2d SERVER FAILED" % n)
                 continue
-            out = subprocess.run([sys.executable, worker, str(port)],
+            out = subprocess.run([sys.executable, worker, str(port), str(n)],
                                  capture_output=True, text=True, timeout=900)
-            print("threads=%-2d %s" % (n, (out.stdout or "").strip()[:120]))
+            line = (out.stdout or "").strip()
+            if not line:
+                # A worker that dies silently is worse than no benchmark: it
+                # prints an empty row that reads like a measurement. Report
+                # the return code and the last stderr line instead.
+                err = (out.stderr or "").strip().splitlines()
+                line = "FAILED rc=%d %s" % (
+                    out.returncode, err[-1] if err else "(no stderr)")
+            print("threads=%-2d %s" % (n, line[:200]))
         finally:
             proc.terminate()
             try:
