@@ -309,7 +309,7 @@ def main(argv=None):
     print("build : %s%s" % (
         args.build,
         " (device %s)" % args.device if args.device else
-        " (no --device: llama.cpp will use device 0)" if args.build == "vulkan"
+        " (no --device: llama.cpp picks its own default)" if args.build == "vulkan"
         else ""))
     print("prompt: %s, max_tokens=%d" % (prompt_kind, PROMPT_MAX_TOKENS))
     print("gen   : counting prompt, max_tokens=%d" % GEN_MAX_TOKENS)

@@ -44,9 +44,10 @@ def build_parser():
                            "default; needs the Vulkan build of llama.cpp, "
                            "see README)")
     scan.add_argument("--device", default=None,
-                      help="Vulkan device for --n-gpu-layers, e.g. vulkan0 "
-                           "(default: llama.cpp picks device 0, which may "
-                           "not be your fastest GPU)")
+                      help="Vulkan device for --n-gpu-layers, e.g. vulkan1 "
+                           "(default: llama.cpp picks its own, which measured "
+                           "half the explicit-device rate on a 3-GPU "
+                           "machine; --list-devices shows your options)")
     scan.add_argument("--n-ctx", type=int, default=4096,
                       help="context window (default: 4096)")
     scan.add_argument("--max-attempts", type=int, default=3,
@@ -104,8 +105,10 @@ def cmd_scan(args, llm=None):
             print("engine: llama.cpp, %d layers on GPU%s"
                   % (ngl, " (%s)" % device if device else ""))
             if not device:
-                print("        note: no --device given; llama.cpp will use "
-                      "Vulkan device 0, which may not be your fastest GPU")
+                print("        note: no --device given; llama.cpp picks its "
+                      "own default, which measured half the explicit-device "
+                      "rate on this 3-GPU machine -- see "
+                      "tools/bench_backends.py --list-devices")
         elif device:
             print("engine: llama.cpp, CPU only "
                   "(--device ignored without --n-gpu-layers)")
