@@ -104,3 +104,18 @@ def test_scan_empty_dir_raises(tmp_path):
     with pytest.raises(SystemExit):
         from invoicelens.cli import cmd_scan
         cmd_scan(args)
+
+
+def test_parser_gpu_flags_default_off():
+    parser = build_parser()
+    args = parser.parse_args(["scan", FIXTURES])
+    assert args.n_gpu_layers is None
+    assert args.device is None
+
+
+def test_parser_gpu_flags_parsed():
+    parser = build_parser()
+    args = parser.parse_args(
+        ["scan", FIXTURES, "--n-gpu-layers", "26", "--device", "vulkan0"])
+    assert args.n_gpu_layers == 26
+    assert args.device == "vulkan0"

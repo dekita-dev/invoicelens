@@ -5,11 +5,19 @@ Generation on a small model is memory-bandwidth bound, and hyperthreading
 often hurts rather than helps. This asks the model for a fixed amount of
 output at several thread counts and reports seconds per run.
 
+Note the unit: the reply is one number per line, so the printed figure is
+seconds per *output line*, not seconds per token. Per-token rates (split
+into prompt processing and generation) come from tools/bench_backends.py.
+
 Each setting runs in its own server, so a bad setting cannot poison the next.
+
+Usage:
+    python tools/bench_threads.py [counts...] [--server PATH] [--model PATH]
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
@@ -18,9 +26,8 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-MODEL = os.path.join(
-    os.path.expanduser("~"), ".cache", "invoicelens", "models",
-    "gemma-2-2b-it-Q4_K_M.gguf",
+from invoicelens.engine import (  # noqa: E402
+    DEFAULT_MODEL_PATH, EngineError, find_server_exe,
 )
 
 WORKER = r'''
@@ -41,18 +48,33 @@ print("OK|%.1fs|~%d lines|%.2f s/line" % (dt, n, dt/max(n,1)))
 '''
 
 
-def main():
-    server = os.path.join(os.path.expanduser("~"), ".cache", "invoicelens",
-                          "llama.cpp", "llama-server.exe")
-    if not os.path.isfile(server):
-        print("llama-server not found at %s" % server)
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("counts", nargs="*", type=int,
+                    help="thread counts to try (default: 2 4 6 8)")
+    ap.add_argument("--server", default=None,
+                    help="llama-server path (default: located via "
+                         "engine.find_server_exe())")
+    ap.add_argument("--model", default=DEFAULT_MODEL_PATH,
+                    help="GGUF model path")
+    args = ap.parse_args(argv)
+
+    server = args.server
+    if server is None:
+        try:
+            server = find_server_exe()
+        except EngineError as exc:
+            print(str(exc))
+            return 1
+    if not os.path.isfile(args.model):
+        print("model not found at %s" % args.model)
         return 1
 
     worker = os.path.join(HERE, "_bench_worker.py")
     with open(worker, "w", encoding="utf-8") as fh:
         fh.write(WORKER)
 
-    counts = [int(x) for x in (sys.argv[1:] or ["2", "4", "6", "8"])]
+    counts = args.counts or [2, 4, 6, 8]
     for n in counts:
         import socket
         s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()

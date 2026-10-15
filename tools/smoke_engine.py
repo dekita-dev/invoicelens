@@ -4,17 +4,20 @@
 This is the gate between "code written" and "code works". It does three
 things, in order, and fails loudly on the first one that breaks:
 
-  1. load the GGUF through gpt4all (DLL + model compatibility)
+  1. start llama-server and load the GGUF through it (server + model
+     compatibility)
   2. one trivial completion (the runtime actually generates tokens)
   3. one real `extract_fields()` call on a fixture invoice (our prompt and
      JSON repair loop produce parseable output)
 
 Usage:
     python tools/smoke_engine.py [path/to/model.gguf]
+        [--threads N] [--n-gpu-layers N] [--device NAME]
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import time
@@ -31,7 +34,17 @@ FIXTURE = os.path.join(
 
 
 def main() -> int:
-    model_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MODEL_PATH
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("model", nargs="?", default=DEFAULT_MODEL_PATH,
+                    help="GGUF model path")
+    ap.add_argument("--threads", type=int, default=None,
+                    help="CPU threads (default: physical cores, capped at 8)")
+    ap.add_argument("--n-gpu-layers", type=int, default=None,
+                    help="layers to offload to the GPU (default: 0 = CPU)")
+    ap.add_argument("--device", default=None,
+                    help="Vulkan device for --n-gpu-layers, e.g. vulkan0")
+    args = ap.parse_args()
+    model_path = args.model
     print("model : %s" % model_path)
     print("exists: %s" % os.path.isfile(model_path))
     if not os.path.isfile(model_path):
@@ -39,7 +52,9 @@ def main() -> int:
         return 1
 
     t0 = time.time()
-    llm = LocalLLM(model_path=model_path, n_ctx=4096)
+    llm = LocalLLM(model_path=model_path, n_ctx=4096,
+                   n_threads=args.threads, n_gpu_layers=args.n_gpu_layers,
+                   gpu_device=args.device)
     llm.load()
     print("load  : %.1fs" % (time.time() - t0))
 

@@ -117,13 +117,23 @@ def _coerce(payload):
     return out
 
 
-def extract_fields(llm, text, max_attempts=3, max_tokens=512):
-    """Extract structured fields from invoice *text* with a repair loop."""
-    result = ExtractionResult()
-    prompt = (
+def build_prompt(text):
+    """The user-side prompt for one invoice.
+
+    Kept as a function so the benchmarks (tools/bench_backends.py) measure
+    the prompt the product actually sends instead of a lookalike that can
+    drift from it.
+    """
+    return (
         "Extract the fields from this invoice text. Reply with JSON only.\n\n"
         "=== INVOICE TEXT ===\n%s\n=== END ===" % text
     )
+
+
+def extract_fields(llm, text, max_attempts=3, max_tokens=512):
+    """Extract structured fields from invoice *text* with a repair loop."""
+    result = ExtractionResult()
+    prompt = build_prompt(text)
 
     for attempt in range(1, max_attempts + 1):
         result.attempts = attempt

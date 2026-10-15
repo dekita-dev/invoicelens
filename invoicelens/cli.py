@@ -37,7 +37,16 @@ def build_parser():
     scan.add_argument("--model", default=DEFAULT_MODEL_PATH,
                       help="path to the GGUF model file")
     scan.add_argument("--threads", type=int, default=None,
-                      help="CPU threads for inference (default: cores - 1)")
+                      help="CPU threads for inference (default: physical "
+                           "core count, capped at 8)")
+    scan.add_argument("--n-gpu-layers", type=int, default=None,
+                      help="layers to offload to the GPU (0 = CPU only, the "
+                           "default; needs the Vulkan build of llama.cpp, "
+                           "see README)")
+    scan.add_argument("--device", default=None,
+                      help="Vulkan device for --n-gpu-layers, e.g. vulkan0 "
+                           "(default: llama.cpp picks device 0, which may "
+                           "not be your fastest GPU)")
     scan.add_argument("--n-ctx", type=int, default=4096,
                       help="context window (default: 4096)")
     scan.add_argument("--max-attempts", type=int, default=3,
@@ -81,10 +90,27 @@ def cmd_scan(args, llm=None):
     if llm is None:
         try:
             llm = LocalLLM(model_path=args.model, n_ctx=args.n_ctx,
-                           n_threads=args.threads)
+                           n_threads=args.threads,
+                           n_gpu_layers=args.n_gpu_layers,
+                           gpu_device=args.device)
             llm.load()
         except EngineError as exc:
             raise SystemExit("engine error: %s" % exc)
+        # Print the engine line after load, from the resolved config, so it
+        # reflects env fallbacks too. getattr keeps injected stubs working.
+        ngl = getattr(llm, "n_gpu_layers", None) or 0
+        device = getattr(llm, "gpu_device", None)
+        if ngl > 0:
+            print("engine: llama.cpp, %d layers on GPU%s"
+                  % (ngl, " (%s)" % device if device else ""))
+            if not device:
+                print("        note: no --device given; llama.cpp will use "
+                      "Vulkan device 0, which may not be your fastest GPU")
+        elif device:
+            print("engine: llama.cpp, CPU only "
+                  "(--device ignored without --n-gpu-layers)")
+        else:
+            print("engine: llama.cpp, CPU only")
 
     records = []
     started = time.time()

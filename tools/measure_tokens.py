@@ -12,10 +12,14 @@ Run it with the runtime and model already in place:
 
 Prints one line per file (prompt tokens, completion tokens, wall seconds)
 and a total. No report files are written; this is a measurement, not a run.
+
+Backend options (--threads / --n-gpu-layers / --device) are passed straight
+through to the engine; see README, 'Optional: the Vulkan build'.
 """
 
 from __future__ import annotations
 
+import argparse
 import glob
 import os
 import sys
@@ -23,7 +27,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from invoicelens.engine import LocalLLM, _default_threads  # noqa: E402
+from invoicelens.engine import LocalLLM  # noqa: E402
 from invoicelens.extract import extract_fields  # noqa: E402
 from invoicelens.textsource import read_text  # noqa: E402
 
@@ -35,19 +39,35 @@ def _usage_totals(llm):
 
 
 def main(argv):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("files", nargs="*",
+                    help="fixture files (default: everything in fixtures/)")
+    ap.add_argument("--threads", type=int, default=None,
+                    help="CPU threads (default: physical cores, capped at 8)")
+    ap.add_argument("--n-gpu-layers", type=int, default=None,
+                    help="layers to offload to the GPU (default: 0 = CPU)")
+    ap.add_argument("--device", default=None,
+                    help="Vulkan device for --n-gpu-layers, e.g. vulkan0")
+    args = ap.parse_args(argv)
+
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if argv:
-        files = argv
+    if args.files:
+        files = args.files
     else:
         files = sorted(glob.glob(os.path.join(here, "fixtures", "*")))
     if not files:
         print("no fixtures found")
         return 1
 
-    print("threads: %d (physical cores detected)" % _default_threads())
-    llm = LocalLLM()
+    llm = LocalLLM(n_threads=args.threads, n_gpu_layers=args.n_gpu_layers,
+                   gpu_device=args.device)
     t0 = time.time()
     llm.load()
+    ngl = getattr(llm, "n_gpu_layers", None) or 0
+    print("threads: %d (physical cores detected)" % llm.n_threads)
+    if ngl > 0:
+        print("gpu    : %d layers offloaded (device %s)"
+              % (ngl, getattr(llm, "gpu_device", None) or "default"))
     print("model load: %.1fs" % (time.time() - t0))
     print("")
     print("%-34s %8s %8s %8s %9s" % ("file", "prompt", "compl", "total", "seconds"))

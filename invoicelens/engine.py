@@ -45,24 +45,66 @@ LLAMA_DIR_CANDIDATES = [
                  "build", "bin"),
 ]
 
+# Same idea for the Vulkan build, which is a separate download that unpacks
+# to its own directory. A separate list means a GPU-less machine is never
+# sent looking for it, and the two builds cannot overwrite each other.
+LLAMA_DIR_CANDIDATES_VULKAN = [
+    os.environ.get("INVOICELENS_LLAMA_DIR_VULKAN"),
+    os.path.join(os.path.expanduser("~"), ".cache", "invoicelens",
+                 "llama.cpp-vulkan"),
+    os.path.join(os.path.expanduser("~"), ".cache", "invoicelens",
+                 "llama.cpp-vulkan", "build", "bin"),
+]
+
 SERVER_EXE = "llama-server.exe" if sys.platform == "win32" else "llama-server"
+
+# The Vulkan build also ships ggml-cpu DLLs, so "a CPU backend exists in
+# this directory" proves nothing about GPU support. The backend library
+# itself is the only honest evidence.
+VULKAN_BACKEND_LIBS = ("ggml-vulkan.dll", "libggml-vulkan.so",
+                       "libggml-vulkan.dylib")
 
 
 class EngineError(Exception):
     """Raised when the local model cannot be loaded or run."""
 
 
-def find_server_exe():
-    """Locate llama-server, honouring INVOICELENS_LLAMA_DIR then PATH."""
-    for cand in LLAMA_DIR_CANDIDATES:
+def _has_vulkan_backend(directory):
+    """True when *directory* really contains a Vulkan backend library."""
+    return any(os.path.isfile(os.path.join(directory, lib))
+               for lib in VULKAN_BACKEND_LIBS)
+
+
+def find_server_exe(gpu=False):
+    """Locate llama-server, honouring INVOICELENS_LLAMA_DIR then PATH.
+
+    With gpu=True, only builds that actually contain the Vulkan backend
+    count, and the Vulkan candidate list is searched first. The error then
+    points at the fetch command, because that is the fix; the CPU-only
+    message is left exactly as it was.
+    """
+    if gpu:
+        candidates = LLAMA_DIR_CANDIDATES_VULKAN + list(LLAMA_DIR_CANDIDATES)
+    else:
+        candidates = list(LLAMA_DIR_CANDIDATES)
+    for cand in candidates:
         if not cand:
             continue
         path = os.path.join(cand, SERVER_EXE)
-        if os.path.isfile(path):
+        if os.path.isfile(path) and (not gpu or _has_vulkan_backend(cand)):
             return path
     found = shutil.which(SERVER_EXE)
-    if found:
+    if found and (not gpu or _has_vulkan_backend(os.path.dirname(found))):
         return found
+    if gpu:
+        raise EngineError(
+            "no llama-server with a Vulkan backend was found.\n"
+            "GPU offload needs the Vulkan build of llama.cpp, which is a\n"
+            "separate download from the CPU build:\n"
+            "  python tools/fetch_llama_cpp.py --flavor vulkan\n"
+            "or point INVOICELENS_LLAMA_DIR_VULKAN at an unpacked one.\n"
+            "CPU-only inference keeps working without any of this."
+        )
     raise EngineError(
         "%s not found.\n"
         "Download the llama.cpp release zip for your platform from\n"
@@ -72,6 +114,48 @@ def find_server_exe():
         "See README, 'Getting the runtime'."
         % SERVER_EXE
     )
+
+
+def _build_server_cmd(server_exe, model_path, port, n_ctx, n_threads,
+                      n_gpu_layers=0, gpu_device=None):
+    """argv for llama-server.
+
+    n_gpu_layers=0 reproduces the CPU-only command byte for byte (a test
+    pins that, so the default path cannot drift). Above zero, --n-gpu-layers
+    and an optional --device are appended and --log-disable is dropped:
+    when a GPU is involved the log is the only way to see which backend and
+    device were actually picked.
+    """
+    cmd = [
+        server_exe,
+        "--model", model_path,
+        "--host", "127.0.0.1",
+        "--port", str(port),
+        "--ctx-size", str(n_ctx),
+        "--threads", str(n_threads),
+    ]
+    if n_gpu_layers and n_gpu_layers > 0:
+        cmd += ["--n-gpu-layers", str(n_gpu_layers)]
+        if gpu_device:
+            cmd += ["--device", gpu_device]
+    else:
+        cmd += ["--log-disable"]
+    return cmd
+
+
+def _env_int(name, fallback):
+    """int from the environment, tolerating junk: garbage becomes 0.
+
+    A malformed INVOICELENS_N_GPU_LAYERS must fail safe to CPU-only, never
+    to a crash and never to a guess.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return fallback
+    try:
+        return int(str(raw).strip())
+    except (TypeError, ValueError):
+        return 0
 
 
 def _free_port():
@@ -160,7 +244,8 @@ class LocalLLM:
     """
 
     def __init__(self, model_path=None, n_ctx=4096, n_threads=None,
-                 startup_timeout=300.0, server_exe=None):
+                 startup_timeout=300.0, server_exe=None,
+                 n_gpu_layers=None, gpu_device=None):
         self.model_path = model_path or DEFAULT_MODEL_PATH
         if not os.path.isfile(self.model_path):
             raise EngineError(
@@ -171,7 +256,16 @@ class LocalLLM:
         self.n_ctx = n_ctx
         self.n_threads = n_threads or _default_threads()
         self.startup_timeout = startup_timeout
-        self._server_exe = server_exe or find_server_exe()
+        # GPU offload is opt-in and off by default. A requested layer count
+        # also decides which build we look for: a CPU-only llama-server
+        # accepts --n-gpu-layers and then quietly runs on CPU anyway, and a
+        # silent fallback is the one outcome worth failing loudly over.
+        self.n_gpu_layers = _env_int("INVOICELENS_N_GPU_LAYERS", n_gpu_layers)
+        self.gpu_device = os.environ.get("INVOICELENS_DEVICE") or gpu_device
+        if server_exe is None:
+            server_exe = find_server_exe(
+                gpu=bool(self.n_gpu_layers and self.n_gpu_layers > 0))
+        self._server_exe = server_exe
         self._proc = None
         self._port = None
         self._log = None
@@ -194,15 +288,12 @@ class LocalLLM:
         )
         self._log = open(self._log_path, "w", encoding="utf-8", errors="replace")
 
-        cmd = [
-            self._server_exe,
-            "--model", self.model_path,
-            "--host", "127.0.0.1",
-            "--port", str(self._port),
-            "--ctx-size", str(self.n_ctx),
-            "--threads", str(self.n_threads),
-            "--log-disable",
-        ]
+        cmd = _build_server_cmd(
+            self._server_exe, self.model_path, self._port,
+            self.n_ctx, self.n_threads,
+            n_gpu_layers=self.n_gpu_layers or 0,
+            gpu_device=self.gpu_device,
+        )
         try:
             self._proc = subprocess.Popen(
                 cmd, stdout=self._log, stderr=subprocess.STDOUT,
