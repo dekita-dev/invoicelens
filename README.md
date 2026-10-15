@@ -120,6 +120,7 @@ model : ~/.cache/invoicelens/models/gemma-2-2b-it-Q4_K_M.gguf (1708582752 bytes)
 rules : rules.example.yaml (7 categories)
 files : 3
 
+engine: llama.cpp, CPU only
 [1/3] design-retainer-2026-09.txt
       vendor=NORTHWIND STUDIO date=2026-09-03 total=2400.0 USD
       category=professional_services deductible=True
@@ -135,12 +136,12 @@ files : 3
       category=software_subscriptions deductible=True
       extraction: 1 attempt
 
-done in 199.0s: 3/3 extracted, 0 repaired, 0 failed
+done in 223.3s: 3/3 extracted, 0 repaired, 0 failed
 wrote ./report
 ```
 
 That is the real output of the real run on the bundled fixtures: three
-synthetic invoices, one cold model load, 199 seconds wall clock on a 4-core
+synthetic invoices, one cold model load, 223.3 seconds wall clock on a 4-core
 i5-8350U with the Q4_K_M quantization. No file needed a repair prompt. The
 only thing normalized above is the path, abbreviated to `~`; the byte count,
 the timings and every extracted field are as the tool printed them. Vendor
@@ -201,7 +202,8 @@ array, the raw model reply, and the per-file `extraction` block
 know whether the model struggled on a particular file.
 
 Options: `--rules` (your own rule file), `--model` (another GGUF),
-`--threads`, `--n-ctx`, `--max-attempts`, `--max-tokens`.
+`--threads`, `--n-ctx`, `--max-attempts`, `--max-tokens`,
+`--n-gpu-layers` and `--device` (opt-in GPU offload, see below).
 
 ## What it actually costs (measured, and the answer is not what you expect)
 
@@ -242,8 +244,9 @@ you here is not money:
   to be rate-limited by, no model version pulled out from under you.
 - **It works on a plane.**
 
-And what it costs you is **time**, honestly: about 60 seconds per invoice on
-four cores, against roughly two seconds for a hosted API. That is the real
+And what it costs you is **time**, honestly: one to one and a quarter minutes
+per invoice on four cores (180.3 s and 223.3 s on two runs of the same three
+invoices), against roughly two seconds for a hosted API. That is the real
 trade. If you have a few hundred invoices and an afternoon, local is fine. If
 you have five thousand and a deadline, send them to an API you have vetted and
 accept the privacy cost knowingly.
@@ -252,6 +255,64 @@ One more measured detail worth knowing: the system prompt is 986 characters,
 and the measured prompt for the first file was 583 tokens. Roughly 40% of what
 you send on every single call is the instructions, not the invoice. That
 overhead is identical whether you run locally or pay per token.
+
+## GPU offload (opt-in, and why it is not the default)
+
+On a machine with a discrete GPU the same run gets a lot faster, and the
+number is worth having. Everything below was measured on this machine, which
+has three GPUs; the raw logs and the decision record are in
+[`docs/bench-vulkan.md`](docs/bench-vulkan.md).
+
+First the device matrix, from `llama-bench` (512-token prompt, 16 generated
+tokens, 4 threads, all 26 layers offloaded):
+
+| Device | Prompt tok/s | Generation tok/s |
+|---|---|---|
+| CPU, 4 threads | 23.7 | 6.4 |
+| Intel UHD 620 (integrated) | 18.5 | 4.3 |
+| AMD RX 6600 | 1142.6 | 42.1 |
+| Quadro P500 | cannot allocate | - |
+
+The integrated GPU is **slower than the CPU**, so "offload to the GPU" is not
+advice, it is a device-selection problem. With the fastest device selected,
+the real three-invoice workload (`tools/bench_backends.py`):
+
+| | CPU (default) | RX 6600, 26 layers |
+|---|---|---|
+| Prompt tok/s | 23.0 | 604 |
+| Generation tok/s | 7.44 | 38.7 |
+| Cold start | 5.7 s | 8.3 s |
+| Three invoices, wall clock | 223.3 s | 26.1 s |
+
+That is **8.6x end to end**: about 74 seconds per invoice down to about 9.
+
+Usage:
+
+```bash
+python tools/bench_backends.py --list-devices        # see what your machine has
+python -m invoicelens scan ./invoices --out ./report \
+  --n-gpu-layers 26 --device vulkan1
+```
+
+Why it stays opt-in:
+
+- **Device 0 is not your friend.** Omitting `--device` does not mean device 0:
+  it measured half the explicit-device rate on this machine and matched no
+  single GPU. `--list-devices` exists because the fastest device is not
+  something the tool can know for you.
+- **On a Vulkan build, `--n-gpu-layers 0` does not mean CPU compute.** The
+  weights stay in system RAM but the operators still run on the GPU
+  (`llama-bench` reports `backend: Vulkan`). InvoiceLens therefore sends
+  `--n-gpu-layers 0` explicitly on the CPU path: upstream llama.cpp changed
+  that flag's default from 0 to `auto`, so a flag you do not pass is a flag
+  you do not control.
+- **The quality caveat is real.** Every field the tool depends on came out
+  identical between the CPU run and the GPU run: vendor, dates, amounts, all
+  nine line items, deductibility, one attempt each, zero repairs. One optional
+  free-text field did not: `notes` missed a line it had caught on CPU,
+  reproducibly, across two GPU runs. Same model, different arithmetic,
+  different answer on a field nobody should be trusting anyway. Review the
+  "needs review" list either way.
 
 ## How the extraction works
 
@@ -365,6 +426,16 @@ and `llama-server` gives an OpenAI-compatible HTTP surface, which means the
 engine wrapper is about 40 lines of `urllib` instead of a ctypes binding
 against a moving C ABI.
 
+**Threads default to physical cores, not logical ones.** Generation with a
+small quantized model is memory-bandwidth bound, so hyperthreads cost more
+than they return. Measured on this machine with `tools/bench_backends.py`,
+which reads the server's own `timings` block instead of dividing wall clock
+by a guessed token count: prompt processing scales from 18.7 tok/s at 2
+threads to 33.6 at 8, but generation peaks at 7.44 tok/s on the 4 physical
+cores and then *drops* 22% to 5.84 once hyperthreads join in. Because
+generation is roughly two thirds of a real invoice's time, the default is
+physical core count, detected per platform, capped at 8.
+
 The tradeoff is honest and documented: one subprocess to start, health-check
 and stop. That is contained in `load()` and `close()` in `engine.py`.
 
@@ -425,13 +496,14 @@ tools/
   smoke_engine.py      end-to-end check against a real model
   measure_tokens.py    real prompt/completion token counts per file
   bench_threads.py     thread-count benchmark, one server per setting
+  bench_backends.py    prompt-vs-generation sweep: backends, devices, ngl, threads
 ```
 
 ## Development
 
 ```bash
 pip install pytest
-python -m pytest               # 25 tests, all stubbed, no model download
+python -m pytest               # 45 tests, all stubbed, no model download
 python tools/smoke_engine.py  # needs the runtime + model
 python tools/measure_tokens.py  # real token counts, needs the model
 ```
