@@ -224,7 +224,9 @@ def _list_devices(build, server_override, model):
         os.path.dirname(server_exe),
         "llama-bench.exe" if sys.platform == "win32" else "llama-bench")
     if os.path.isfile(bench):
-        print("$ %s --list-devices" % bench)
+        # flush first: the child writes straight to the fd, and without a
+        # flush its output can overtake this header in the pipe.
+        print("$ %s --list-devices" % bench, flush=True)
         rc = subprocess.call([bench, "--list-devices"])
         if rc == 0:
             return 0

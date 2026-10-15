@@ -21,11 +21,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import http.client
 import io
 import json
 import os
 import platform
 import sys
+import tarfile
 import time
 import urllib.error
 import urllib.request
@@ -55,7 +57,11 @@ def _get_json(url, tries=4):
                               "User-Agent": "invoicelens-fetch"})
             with urllib.request.urlopen(req, timeout=60) as resp:
                 return json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.URLError, OSError, ValueError) as exc:
+        except (urllib.error.URLError, OSError, ValueError,
+                http.client.HTTPException) as exc:
+            # HTTPException is in the list on purpose: a truncated chunked
+            # response through a flaky proxy raises IncompleteRead, which
+            # is not an OSError and would otherwise kill the retry loop.
             last = exc
             time.sleep(2 * (i + 1))
     raise SystemExit("could not reach the GitHub API (%s). "
@@ -65,34 +71,37 @@ def _get_json(url, tries=4):
 def _platform_needle(flavor="cpu"):
     """Filename fragment for this OS/arch and backend flavor.
 
-    The flavor fragments are deliberately non-overlapping ("win-cpu-x64"
-    is not a substring of "win-vulkan-x64", and "ubuntu-x64" is not a
-    substring of "ubuntu-vulkan-x64"), so a plain `in` match stays safe.
+    Checked against the actual b11645 asset list: every Windows and Linux
+    combination ships both x64 and arm64 for both flavors, and only macOS
+    has no Vulkan build (it uses Metal instead). The fragments are
+    deliberately non-overlapping ("win-cpu-x64" is not a substring of
+    "win-vulkan-x64", and "ubuntu-x64" is not a substring of
+    "ubuntu-vulkan-x64"), so a plain `in` match stays safe.
     """
     system = platform.system()
     machine = platform.machine().lower()
     x64 = machine in ("amd64", "x86_64")
     arm = machine in ("arm64", "aarch64")
-    if flavor == "vulkan":
-        if system == "Darwin":
+    if system == "Darwin":
+        if flavor != "cpu":
             raise SystemExit(
                 "llama.cpp ships no Vulkan build for macOS; the CPU build "
                 "there already uses Metal, which is faster anyway.")
-        if system == "Windows":
-            if x64:
-                return "win-vulkan-x64"
-            raise SystemExit("no Windows-on-ARM Vulkan build exists")
-        if system == "Linux":
-            if x64:
-                return "ubuntu-vulkan-x64"
-            raise SystemExit("no ARM64 Linux Vulkan build in the release")
-        raise SystemExit("unsupported platform: %s %s" % (system, machine))
-    if system == "Windows":
-        return "win-cpu-x64" if x64 else "win-cpu-arm64"
-    if system == "Darwin":
         return "macos-arm64" if arm else "macos-x64"
-    if system == "Linux":
-        return "ubuntu-x64" if x64 else "ubuntu-arm64"
+    if system in ("Windows", "Linux"):
+        prefix = "win" if system == "Windows" else "ubuntu"
+        if x64:
+            arch = "x64"
+        elif arm:
+            arch = "arm64"
+        else:
+            raise SystemExit("unsupported machine: %s %s" % (system, machine))
+        # The naming is inconsistent upstream: Windows puts the flavor in
+        # the name (win-cpu-x64, win-vulkan-x64), Linux only does for the
+        # non-default flavors (ubuntu-x64 for CPU, ubuntu-vulkan-x64).
+        if flavor == "cpu" and system == "Linux":
+            return "%s-%s" % (prefix, arch)
+        return "%s-%s-%s" % (prefix, flavor, arch)
     raise SystemExit("unsupported platform: %s %s" % (system, machine))
 
 
@@ -100,7 +109,9 @@ def _pick_asset(release, flavor="cpu"):
     needle = _platform_needle(flavor)
     for asset in release.get("assets", []):
         name = asset.get("name", "")
-        if needle in name and name.endswith(".zip"):
+        # Windows ships .zip; Linux and macOS ship .tar.gz. Matching only
+        # .zip silently broke every non-Windows download.
+        if needle in name and name.endswith((".zip", ".tar.gz")):
             return name, asset["browser_download_url"], asset["size"]
     return None
 
@@ -159,17 +170,37 @@ def main(argv=None):
 
     req = urllib.request.Request(
         url, headers={"User-Agent": "invoicelens-fetch"})
-    with urllib.request.urlopen(req, timeout=600) as resp:
-        blob = resp.read()
+    blob = None
+    last = None
+    for i in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                blob = resp.read()
+            break
+        except (OSError, http.client.HTTPException) as exc:
+            # A truncated download through a flaky proxy is worth a retry;
+            # the size check below remains the real verification.
+            last = exc
+            blob = None
+            time.sleep(2 * (i + 1))
+    if blob is None:
+        raise SystemExit("download failed after retries (%s). "
+                         "Fetch it by hand: %s" % (last, url))
     if len(blob) != size:
         raise SystemExit("size mismatch: got %d, expected %d" % (len(blob), size))
     print("verified: %d bytes" % len(blob))
 
     os.makedirs(dest, exist_ok=True)
-    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-        if zf.testzip() is not None:
-            raise SystemExit("downloaded archive is corrupt")
-        zf.extractall(dest)
+    if name.endswith(".zip"):
+        with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+            if zf.testzip() is not None:
+                raise SystemExit("downloaded archive is corrupt")
+            zf.extractall(dest)
+    else:
+        with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as tf:
+            # filter="data" (3.12+): no absolute paths, no links escaping
+            # the destination.
+            tf.extractall(dest, filter="data")
 
     server = "llama-server.exe" if sys.platform == "win32" else "llama-server"
     path = os.path.join(dest, server)
