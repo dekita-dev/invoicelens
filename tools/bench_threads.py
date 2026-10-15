@@ -81,7 +81,7 @@ def main(argv=None):
         log = open(os.path.join(os.environ.get("TEMP", "/tmp"),
                                 "il-bench-%d.log" % port), "w")
         proc = subprocess.Popen(
-            [server, "--model", MODEL, "--host", "127.0.0.1",
+            [server, "--model", args.model, "--host", "127.0.0.1",
              "--port", str(port), "--ctx-size", "2048",
              "--threads", str(n), "--log-disable"],
             stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
