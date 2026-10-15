@@ -120,11 +120,17 @@ def _build_server_cmd(server_exe, model_path, port, n_ctx, n_threads,
                       n_gpu_layers=0, gpu_device=None):
     """argv for llama-server.
 
-    n_gpu_layers=0 reproduces the CPU-only command byte for byte (a test
-    pins that, so the default path cannot drift). Above zero, --n-gpu-layers
-    and an optional --device are appended and --log-disable is dropped:
-    when a GPU is involved the log is the only way to see which backend and
-    device were actually picked.
+    n_gpu_layers=0 emits an explicit `--n-gpu-layers 0`, not an omitted flag.
+    Upstream llama.cpp changed that flag's default to "auto" (measured on
+    builds 11620 and 11645: `--help` reports `default: auto`), which offloads
+    to a GPU whenever a backend is present. Omitting the flag would make
+    "CPU" mean "whatever the binary defaults to", and an explicit CLI value
+    also beats a stray LLAMA_ARG_N_GPU_LAYERS in the environment. A test
+    pins the whole default argv, so any future drift fails loudly.
+
+    Above zero, --n-gpu-layers and an optional --device are appended and
+    --log-disable is dropped: when a GPU is involved the log is the only way
+    to see which backend and device were actually picked.
     """
     cmd = [
         server_exe,
@@ -139,7 +145,7 @@ def _build_server_cmd(server_exe, model_path, port, n_ctx, n_threads,
         if gpu_device:
             cmd += ["--device", gpu_device]
     else:
-        cmd += ["--log-disable"]
+        cmd += ["--n-gpu-layers", "0", "--log-disable"]
     return cmd
 
 

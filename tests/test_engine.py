@@ -2,8 +2,9 @@
 
 These pin the two behaviours that must never drift:
 
-  * the default (CPU-only) server argv is byte-for-byte what it was before
-    GPU offload existed;
+  * the default (CPU-only) server argv is pinned, and it carries an explicit
+    `--n-gpu-layers 0` because upstream llama.cpp now defaults that flag to
+    "auto", which would silently offload on any build with a GPU backend;
   * a requested GPU layer count can only ever select a build that really
     contains the Vulkan backend -- the library itself, not a directory
     name, because the Vulkan build also ships ggml-cpu DLLs.
@@ -70,13 +71,15 @@ def test_gpu_lookup_needs_the_backend_library(tmp_path, monkeypatch):
 
 
 def test_build_server_cmd_default_argv_is_pinned():
-    # The CPU-only command, byte for byte. If this test needs changing,
-    # the default path changed, and that needs a conscious decision.
+    # The CPU-only command, pinned element by element. If this test needs
+    # changing, the default path changed, and that needs a conscious
+    # decision. The explicit --n-gpu-layers 0 is load-bearing: without it
+    # the flag defaults to "auto" upstream and CPU stops meaning CPU.
     cmd = _build_server_cmd("llama-server", "m.gguf", 8080, 4096, 4)
     assert cmd == [
         "llama-server", "--model", "m.gguf", "--host", "127.0.0.1",
         "--port", "8080", "--ctx-size", "4096", "--threads", "4",
-        "--log-disable",
+        "--n-gpu-layers", "0", "--log-disable",
     ]
 
 
