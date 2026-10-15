@@ -1,0 +1,9 @@
+model : C:\Users\Rooney\.cache\invoicelens\models\gemma-2-2b-it-Q4_K_M.gguf
+build : vulkan (device vulkan1)
+prompt: first fixtures/*.txt, max_tokens=1
+gen   : counting prompt, max_tokens=200
+
+build    device     ngl     thr   prompt tok/s      gen tok/s      cold s  timing source
+----------------------------------------------------------------------------------------
+vulkan   vulkan1      0       4           54.3          20.10        20.2  server timings
+vulkan   vulkan1     26       4          604.4          38.74         8.3  server timings

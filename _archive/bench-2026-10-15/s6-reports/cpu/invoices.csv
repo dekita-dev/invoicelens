@@ -1,0 +1,4 @@
+file,vendor,invoice_number,invoice_date,due_date,currency,subtotal,tax,total,category,deductible,rule_note,extraction_attempts,extraction_repaired,error
+design-retainer-2026-09.txt,NORTHWIND STUDIO,NS-2026-0917,2026-09-03,2026-10-03,USD,2400.0,0.0,2400.0,professional_services,True,Subcontractor and agency invoices are normally a business cost.,1,False,
+office-mixed-2026-09.txt,MERIDIAN OFFICE SUPPLY,MOS-88921,2026-09-27,2026-10-27,USD,1041.5,83.32,1124.82,office_supplies,True,Office equipment may be deductible or may need to be capitalized. Check locally.,1,False,
+saas-subscription-2026-10.txt,"GITHUB, INC.",GH-7714-2026,2026-10-02,,USD,4.0,0.0,4.0,software_subscriptions,True,Business software subscriptions are normally deductible.,1,False,

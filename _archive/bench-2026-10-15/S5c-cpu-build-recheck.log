@@ -1,0 +1,8 @@
+model : C:\Users\Rooney\.cache\invoicelens\models\gemma-2-2b-it-Q4_K_M.gguf
+build : cpu
+prompt: first fixtures/*.txt, max_tokens=1
+gen   : counting prompt, max_tokens=200
+
+build    device     ngl     thr   prompt tok/s      gen tok/s      cold s  timing source
+----------------------------------------------------------------------------------------
+cpu      -            0       4           18.7           6.11         7.3  server timings

@@ -1,0 +1,134 @@
+[
+  {
+    "file": "design-retainer-2026-09.txt",
+    "fields": {
+      "vendor": "NORTHWIND STUDIO",
+      "invoice_number": "NS-2026-0917",
+      "invoice_date": "2026-09-03",
+      "due_date": "2026-10-03",
+      "currency": "USD",
+      "subtotal": 2400.0,
+      "tax": 0.0,
+      "total": 2400.0,
+      "line_items": [
+        {
+          "description": "Brand identity retainer, Sept",
+          "quantity": 1,
+          "unit_price": 1800.0,
+          "amount": 1800.0
+        },
+        {
+          "description": "Landing page design, phase 2",
+          "quantity": 1,
+          "unit_price": 600.0,
+          "amount": 600.0
+        }
+      ],
+      "payment_method": "bank transfer",
+      "notes": null
+    },
+    "category": "professional_services",
+    "deductible": true,
+    "rule_note": "Subcontractor and agency invoices are normally a business cost.",
+    "extraction": {
+      "attempts": 1,
+      "repaired": false,
+      "errors": []
+    },
+    "error": null
+  },
+  {
+    "file": "office-mixed-2026-09.txt",
+    "fields": {
+      "vendor": "MERIDIAN OFFICE SUPPLY",
+      "invoice_number": "MOS-88921",
+      "invoice_date": "2026-09-27",
+      "due_date": "2026-10-27",
+      "currency": "USD",
+      "subtotal": 1041.5,
+      "tax": 83.32,
+      "total": 1124.82,
+      "line_items": [
+        {
+          "description": "Standing desk frame",
+          "quantity": 1,
+          "unit_price": 389.0,
+          "amount": 389.0
+        },
+        {
+          "description": "Monitor arm, dual",
+          "quantity": 1,
+          "unit_price": 129.0,
+          "amount": 129.0
+        },
+        {
+          "description": "A4 paper, 5 reams",
+          "quantity": 5,
+          "unit_price": 6.5,
+          "amount": 32.5
+        },
+        {
+          "description": "Ergonomic chair",
+          "quantity": 1,
+          "unit_price": 455.0,
+          "amount": 455.0
+        },
+        {
+          "description": "Coffee beans, 1kg",
+          "quantity": 2,
+          "unit_price": 18.0,
+          "amount": 36.0
+        }
+      ],
+      "payment_method": "company credit card",
+      "notes": ""
+    },
+    "category": "office_supplies",
+    "deductible": true,
+    "rule_note": "Office equipment may be deductible or may need to be capitalized. Check locally.",
+    "extraction": {
+      "attempts": 1,
+      "repaired": false,
+      "errors": []
+    },
+    "error": null
+  },
+  {
+    "file": "saas-subscription-2026-10.txt",
+    "fields": {
+      "vendor": "GITHUB, INC.",
+      "invoice_number": "GH-7714-2026",
+      "invoice_date": "2026-10-02",
+      "due_date": null,
+      "currency": "USD",
+      "subtotal": 4.0,
+      "tax": 0.0,
+      "total": 4.0,
+      "line_items": [
+        {
+          "description": "GitHub Team subscription, October 2026",
+          "quantity": 1,
+          "unit_price": 4.0,
+          "amount": 4.0
+        },
+        {
+          "description": "Additional Actions minutes (2,000)",
+          "quantity": 2000,
+          "unit_price": 0.0,
+          "amount": 0.0
+        }
+      ],
+      "payment_method": "Visa ending 4242",
+      "notes": "This is a recurring monthly subscription."
+    },
+    "category": "software_subscriptions",
+    "deductible": true,
+    "rule_note": "Business software subscriptions are normally deductible.",
+    "extraction": {
+      "attempts": 1,
+      "repaired": false,
+      "errors": []
+    },
+    "error": null
+  }
+]
