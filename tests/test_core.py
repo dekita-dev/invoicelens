@@ -113,11 +113,23 @@ def test_read_text_txt():
 
 
 def test_read_text_rejects_unknown_extension(tmp_path):
-    p = tmp_path / "scan.png"
+    # .png is supported as of the OCR change, so the unknown case has to be a
+    # format we genuinely do not handle.
+    p = tmp_path / "scan.docx"
+    p.write_bytes(b"PK\x03\x04")
+    with pytest.raises(UnsupportedSource) as ei:
+        read_text(str(p))
+    assert "unsupported" in str(ei.value)
+
+
+def test_read_text_wraps_corrupt_image(tmp_path):
+    # A truncated PNG must surface as our own error, not as whatever the OCR
+    # library happens to raise.
+    p = tmp_path / "broken.png"
     p.write_bytes(b"\x89PNG\r\n")
     with pytest.raises(UnsupportedSource) as ei:
         read_text(str(p))
-    assert "OCR" in str(ei.value) or "unsupported" in str(ei.value)
+    assert "could not read" in str(ei.value)
 
 
 def test_read_text_rejects_missing_file(tmp_path):

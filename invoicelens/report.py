@@ -59,6 +59,7 @@ def write_json(records, path):
                 "repaired": rec["repaired"],
                 "errors": rec["errors"],
             },
+            "arithmetic": rec.get("arithmetic"),
             "error": rec["error"],
         })
     with io.open(path, "w", encoding="utf-8") as fh:
@@ -90,6 +91,8 @@ def write_summary(records, path, model_desc, rules_desc):
     lines.append("- needed a repair prompt: %d"
                  % sum(1 for r in records if r["repaired"]))
     lines.append("- failed: %d" % (len(records) - len(ok)))
+    lines.append("- arithmetic mismatches: %d"
+                 % sum(1 for r in records if r.get("arithmetic")))
     lines.append("")
 
     by_cat = {}
@@ -115,13 +118,18 @@ def write_summary(records, path, model_desc, rules_desc):
 
     lines.append("## Needs review")
     lines.append("")
-    review = [r for r in records if r["error"] or r["deductible"] is None]
+    review = [r for r in records
+              if r["error"] or r["deductible"] is None
+              or r.get("arithmetic")]
     if not review:
         lines.append("_Nothing._")
     for rec in review:
         if rec["error"]:
             lines.append("- `%s`: %s" % (os.path.basename(rec["file"]),
                                          rec["error"]))
+        elif rec.get("arithmetic"):
+            lines.append("- `%s`: %s" % (os.path.basename(rec["file"]),
+                                         rec["arithmetic"]))
         else:
             lines.append("- `%s`: %s" % (os.path.basename(rec["file"]),
                                          rec["rule_note"]))

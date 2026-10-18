@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from invoicelens.extract import (  # noqa: E402
-    _coerce, _extract_json_block, extract_fields,
+    _coerce, _extract_json_block, arithmetic_note, extract_fields,
 )
 
 
@@ -112,3 +112,44 @@ def test_not_an_invoice_is_still_ok():
     assert res.ok
     assert res.fields["vendor"] is None
     assert res.fields["notes"] == "not an invoice"
+
+
+def test_arithmetic_consistent_passes():
+    # The bundled office-mixed fixture: 1041.5 + 83.32 = 1124.82. In binary
+    # floating point that sum is 1124.8199999999998, which is why the check
+    # goes through Decimal on the string form.
+    fields = {"subtotal": 1041.5, "tax": 83.32, "total": 1124.82}
+    assert arithmetic_note(fields) is None
+
+
+def test_arithmetic_mismatch_is_flagged_with_the_numbers():
+    fields = {"subtotal": 11600.0, "tax": 696.0, "total": 122960.0}
+    note = arithmetic_note(fields)
+    assert note is not None
+    assert "11600" in note and "696" in note and "122960" in note
+
+
+def test_arithmetic_skips_incomplete_rows():
+    # A missing field is the extraction's problem, not arithmetic's: there
+    # is nothing to cross-check, so no flag.
+    assert arithmetic_note({"subtotal": 1, "tax": 2}) is None
+    assert arithmetic_note({"total": 3}) is None
+    assert arithmetic_note({}) is None
+    assert arithmetic_note(None) is None
+
+
+def test_arithmetic_ignores_non_numbers():
+    # The model is told to use null, not to invent; a string value means the
+    # reply did not follow the schema, which the parser reports instead.
+    assert arithmetic_note({"subtotal": "x", "tax": 1, "total": 2}) is None
+
+
+def test_arithmetic_handles_string_numbers():
+    # Models do return "1124.82" as a string sometimes; str() round-trips.
+    fields = {"subtotal": "1041.5", "tax": "83.32", "total": "1124.82"}
+    assert arithmetic_note(fields) is None
+
+
+def test_arithmetic_tax_zero_is_consistent():
+    fields = {"subtotal": 2400.0, "tax": 0.0, "total": 2400.0}
+    assert arithmetic_note(fields) is None

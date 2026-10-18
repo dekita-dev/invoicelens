@@ -1,0 +1,86 @@
+{
+ "name": "multi-page text-layer invoices",
+ "count": 5,
+ "records": [
+  {
+   "file": "mp-legal-services.pdf",
+   "lang": "en",
+   "pages": 2,
+   "fields": {
+    "vendor": "Ellery & Pike LLP",
+    "doc_no": "EP-2026-0914",
+    "date": "09/14/2026",
+    "subtotal": "5,080.00",
+    "tax": "444.50",
+    "total": "5,524.50"
+   },
+   "page1_marker": "Continued on page 2.",
+   "page2_marker": "page 2 of 2",
+   "page1_subtotal": "4,675.00"
+  },
+  {
+   "file": "mp-lab-supplies.pdf",
+   "lang": "en",
+   "pages": 2,
+   "fields": {
+    "vendor": "Corvid Lab Supply",
+    "doc_no": "CL-4471",
+    "date": "09/21/2026",
+    "subtotal": "1,158.00",
+    "tax": "72.38",
+    "total": "1,230.38"
+   },
+   "page1_marker": "Continued on page 2.",
+   "page2_marker": "page 2 of 2",
+   "page1_subtotal": "908.00"
+  },
+  {
+   "file": "mp-design-retainer.pdf",
+   "lang": "en",
+   "pages": 2,
+   "fields": {
+    "vendor": "Fieldnote Studio",
+    "doc_no": "FS-2026-118",
+    "date": "09/30/2026",
+    "subtotal": "6,450.00",
+    "tax": "838.50",
+    "total": "7,288.50"
+   },
+   "page1_marker": "Continued on page 2.",
+   "page2_marker": "page 2 of 2",
+   "page1_subtotal": "5,350.00"
+  },
+  {
+   "file": "mp-travel-expenses.pdf",
+   "lang": "en",
+   "pages": 2,
+   "fields": {
+    "vendor": "Meridian Travel Desk",
+    "doc_no": "MT-2026-2210",
+    "date": "10/02/2026",
+    "subtotal": "2,470.00",
+    "tax": "234.65",
+    "total": "2,704.65"
+   },
+   "page1_marker": "Continued on page 2.",
+   "page2_marker": "page 2 of 2",
+   "page1_subtotal": "2,240.00"
+  },
+  {
+   "file": "mp-software-annual.pdf",
+   "lang": "en",
+   "pages": 2,
+   "fields": {
+    "vendor": "Ridgeline Software Inc.",
+    "doc_no": "RS-2026-8842",
+    "date": "10/05/2026",
+    "subtotal": "3,930.00",
+    "tax": "324.23",
+    "total": "4,254.23"
+   },
+   "page1_marker": "Continued on page 2.",
+   "page2_marker": "page 2 of 2",
+   "page1_subtotal": "2,580.00"
+  }
+ ]
+}

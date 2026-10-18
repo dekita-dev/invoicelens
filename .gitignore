@@ -11,3 +11,26 @@ report_*/
 # Working draft of the dev.to submission article. Not part of the tool; the
 # published post lives on dev.to and links back here.
 docs/devto-submission.md
+
+# Downloaded public fixtures (CORD v2, CC BY 4.0). Same policy as the model
+# weights: fetched on demand by tools/fetch_public_fixtures.py, never
+# vendored. The license audit lives in docs/ and is tracked.
+fixtures/public/
+
+# Generated fixture binaries. The generators are deterministic (seeds come
+# from the invoice id and tier), so the manifest alone plus a generator run
+# reproduces every page byte for byte -- vendoring 60 PNGs and 5 PDFs buys
+# nothing. The manifests stay tracked because they are the ground truth.
+fixtures/cjk_synthetic/images/
+fixtures/multipage/*.pdf
+
+# PyInstaller output. The binary is built by tools/build_desktop.py; a copy
+# of each shipped build is archived under _archive/ instead.
+build/
+dist/
+
+# Scratch scripts and archived builds. Measured 2026-10-18: _archive/ was
+# 776 MB, of which 259 MB + 517 MB were two copies of the same desktop build.
+# A binary that cannot be diffed does not belong in history; the recipe that
+# reproduces it (tools/build_desktop.py) is tracked, the size is in SIZE.txt.
+_archive/

@@ -10,6 +10,42 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
+
+
+MONEY_KEYS = ("subtotal", "tax", "total")
+
+
+def arithmetic_note(fields) -> str | None:
+    """Cross-check subtotal + tax == total. A reason string when they disagree.
+
+    The one verification a reader can do in their head, done deterministically
+    so it costs no model call. It catches the failure mode that per-field
+    checks miss: the model can return three plausible-looking numbers that
+    simply do not add up, which means at least one of them is misread even
+    though each one looks fine alone.
+
+    Returns None when the fields are absent (nothing to check -- a missing
+    field is the extraction's problem, not arithmetic's), when they are not
+    numbers, or when they are consistent. Decimal is used on the string form
+    of each value on purpose: 1041.5 + 83.32 != 1124.82 in binary floating
+    point, and a check that cries wolf on every float total is worse than no
+    check at all.
+    """
+    values = []
+    for key in MONEY_KEYS:
+        v = (fields or {}).get(key)
+        if v is None:
+            return None
+        try:
+            values.append(Decimal(str(v)))
+        except (InvalidOperation, ValueError):
+            return None
+    sub, tax, total = values
+    if sub + tax == total:
+        return None
+    return ("subtotal %s + tax %s does not equal total %s"
+            % (sub, tax, total))
 
 
 SYSTEM_PROMPT = """You are an invoice field extractor. You are given the raw \

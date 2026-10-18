@@ -37,9 +37,35 @@ this project is built around:
 | Deductibility flags | Works, rules are yours to edit |
 | CSV + JSON + Markdown summary output | Works |
 | Field extraction with a self-repair loop | Works |
-| Scanned PDFs and images (OCR) | **Not in v1** — see roadmap |
+| Images (`.png` `.jpg` `.jpeg` `.webp` `.bmp`) via local OCR | Works, engine optional — see below |
+| Phone photos of paper invoices | Works; a perspective and lighting pass exists and is off by default (measurements below) |
+| Chinese, Japanese, Korean invoices | Partial — totals read correctly on 58 of 60 synthetic fixtures; text fields depend on the script (table below) |
+| Scanned PDFs | **Not in v1** — needs a page renderer |
 | A GUI | No. CLI only. |
 | Tax advice | **No.** This sorts and flags. It does not decide your return. |
+
+The CJK and image numbers are measured, not claimed. The corpus is 60
+synthetic invoices (5 languages x 3 templates x 4 degradation tiers, from
+`tools/gen_cjk_fixtures.py`), the engine is RapidOCR, and the full run with
+every failure listed is
+[`report/P0_CJK基线_v2.md`](report/P0_CJK基线_v2.md), with the raw rows
+beside it as JSON.
+
+| Script | Total | Invoice no | Date | Vendor |
+|---|---|---|---|---|
+| English | 10/12 | 10/12 | 9/12 | 11/12 |
+| Japanese | 12/12 | 11/12 | 10/12 | 0/12 |
+| Korean | 12/12 | 12/12 | 0/12 | 0/12 |
+| Simplified Chinese | 12/12 | 12/12 | 12/12 | 12/12 |
+| Traditional Chinese | 12/12 | 12/12 | 12/12 | 6/12 |
+
+The table hides two things worth saying in words. Korean dates are not read
+at all by the default engine: it keeps the digits and drops the date
+markers, so `2026년 10월 07일` comes back as `20260928`. Japanese and Korean
+vendor names are not read either: the kanji and hangul come back mangled
+while the numbers beside them are correct, which is the failure shape that
+looks fine in a summary and wrong in the invoice. Installing the optional
+PaddleOCR engine trades about a minute per page for those fields.
 
 ## Install
 
@@ -54,6 +80,20 @@ pip install -r requirements.txt
 
 Requires Python 3.10 or newer. Dependencies are `requests`, `pypdf` and
 `PyYAML` — nothing that needs a compiler.
+
+Reading images needs one more piece, and it is optional: an OCR engine.
+InvoiceLens probes for RapidOCR, PaddleOCR and Tesseract and uses whichever
+it finds:
+
+```bash
+pip install rapidocr-onnxruntime onnxruntime   # smallest, works everywhere
+```
+
+Without any engine, text files and text-based PDFs still work exactly as
+before; handing the tool an image raises a loud `OCRUnavailable` telling you
+which engines it looked for. PaddleOCR is the second engine and measurably
+better on Chinese, Japanese and Korean vendor names, at about a minute per
+page on CPU; Tesseract is detected if it is already on your `PATH`.
 
 ## Getting the runtime
 
@@ -176,6 +216,7 @@ $ cat report/summary.md
 - extracted: 3
 - needed a repair prompt: 0
 - failed: 0
+- arithmetic mismatches: 0
 
 ## By category
 
@@ -203,7 +244,46 @@ know whether the model struggled on a particular file.
 
 Options: `--rules` (your own rule file), `--model` (another GGUF),
 `--threads`, `--n-ctx`, `--max-attempts`, `--max-tokens`,
-`--n-gpu-layers` and `--device` (opt-in GPU offload, see below).
+`--n-gpu-layers` and `--device` (opt-in GPU offload, see below), and
+`--prep`/`--no-prep` (image preprocessing, off by default — see below).
+
+## Photographing an invoice
+
+Point the camera at the paper and the tool does the rest. There is one
+optional pass (`preprocess.py`) that you turn on per run:
+
+1. **Corner detection and perspective correction.** The page outline is
+   found, and a tilted photo is warped back to a flat rectangle.
+2. **Illumination normalization.** A blurred copy of the image estimates the
+   lighting field, and dividing it out removes shadows and gradients.
+
+The pass is all-or-nothing: if any step fails, the original image goes to
+OCR untouched. It also skips itself when the page already fills the frame.
+
+**It is off by default, and that is a measured decision.** On the 60-page
+corpus it cuts character error on hand-held photos by 15 points
+(39.18% to 23.83%) and changes nothing that the tool reports:
+
+| Tier | CER without | CER with | Totals correct without | Totals correct with |
+|---|---|---|---|---|
+| photo (hand-held simulation) | 39.18% | 23.83% | 15/15 | 15/15 |
+| hard (blur + downsample) | 44.94% | 47.09% | 13/15 | 13/15 |
+
+Character accuracy that no reported field benefits from is not worth a
+half-second per page and one more thing that can go wrong, so the default
+is the raw image. The rule was written down before the data came in
+(`report/P0_CJK基线_v2.md` records both), and `--prep` turns the pass on:
+use it when a photo is badly skewed or half in shadow.
+
+What actually helps at capture time, since the correction is not magic:
+
+- **Fill the frame with the page.** A tight crop is what lets the corner
+  detector see the page edges at all.
+- **Even light beats bright light.** A shadow across the page is the hardest
+  thing to divide out; two lamps from opposite sides beat one overhead.
+- **Do not shoot at an extreme angle.** Perspective correction assumes a flat
+  rectangle; a 45-degree shot foreshortens the text itself, which no warp
+  can restore.
 
 ## What it actually costs (measured, and the answer is not what you expect)
 
@@ -345,6 +425,17 @@ extraction; the retry only tells it what went wrong. Every run reports how
 many attempts each file needed and whether it was repaired, so you can see
 the failure rate instead of trusting a silent success.
 
+**3. An arithmetic cross-check, done without the model.** When subtotal,
+tax and total all came back as numbers, the tool checks that they add up —
+with decimal arithmetic on the string form, because `1041.5 + 83.32` is
+`1124.8199999999998` in binary floating point and a check that cries wolf
+on every float total is worse than no check. A page whose numbers do not
+add up has at least one misread field even when each field looks fine
+alone, so it lands in "needs review" with the three numbers spelled out.
+The same check runs in the OCR measurement harness
+(`tools/eval_ocr.py`, the `arith` column) as an independent signal next to
+the per-field rates.
+
 ## The rules file
 
 Deductibility is jurisdiction-, entity-, and year-specific, so it is not
@@ -364,9 +455,12 @@ lands in "needs review" rather than being quietly counted as a business cost.
 
 ## Limitations (read these before trusting the output)
 
-- **Text-based PDFs only.** A scanned invoice has no text layer, and v1 says
-  so instead of extracting nothing and reporting a confident zero. OCR is on
-  the roadmap.
+- **Image-only PDFs are still out.** Photos and standalone image files are
+  read through the local OCR path described above, but a PDF whose pages are
+  scans has no text layer and v1 has no page renderer to turn it into one.
+  The tool says so instead of extracting nothing and reporting a confident
+  zero. Rendering pages is the remaining piece of the OCR story, and it is
+  the top roadmap item.
 - **This is not tax advice.** It sorts and flags. What is deductible is your
   call, or your accountant's.
 - **A 2B model makes mistakes.** It will mis-read a date, invent a `null`
@@ -469,13 +563,23 @@ Gemma-family or Llama-family GGUF; nothing else in this code changes.
 
 ## Roadmap
 
-- **OCR for scans and photos.** The single biggest gap. The plan is to keep it
-  optional and local (a bundled Tesseract or an ONNX OCR model), because the
-  whole privacy argument collapses the moment the image goes to a cloud API.
+- **Page rendering for image-only PDFs.** The image path is done (see
+  "Photographing an invoice" above); what is left is turning scanned PDF
+  pages into images locally, so the same OCR path can read them.
 - **Confidence flags.** Have the model return a per-field confidence so the
   "needs review" list is driven by the model rather than by rule misses.
 - **Currency normalization** using an offline rate table.
-- **Receipt photo intake** through the same local OCR path.
+- **Cross-check on public corpora.** Done for the one corpus with a usable
+  license: CORD v2, 100 real Indonesian receipts, read through the same
+  code. 88% of totals survive the repair layer on the raw image (87% with
+  preprocessing), against 96.7% on the synthetic set — real photographs of
+  crumpled paper are harder than synthetic ones, which is exactly why the
+  number belongs in the report and not in the marketing copy. The corpus
+  itself is fetched on demand (`python tools/fetch_public_fixtures.py`,
+  about 15 MB, CC BY 4.0 verified in
+  [`docs/public-fixtures-license-audit.md`](docs/public-fixtures-license-audit.md)).
+  SROIE and WildReceipt are excluded until a license statement exists, and
+  the audit file records why.
 
 ## Layout
 
@@ -484,26 +588,58 @@ invoicelens/
   engine.py       starts and talks to llama-server
   extract.py      prompt, JSON parsing, repair loop
   classify.py     keyword rules -> category + deductibility
-  textsource.py   .txt / .pdf -> plain text, or a loud refusal
+  textsource.py   .txt / .pdf -> plain text, images -> OCR, or a loud refusal
+  ocr.py          local OCR engine probing: rapidocr / paddleocr / tesseract
+  preprocess.py   corner detection, perspective correction, lighting flatten
+  textnorm.py     deterministic repair of OCR output before the model sees it
   report.py       CSV / JSON / Markdown writers
   cli.py          argument parsing and the run loop
 rules/
   rules.example.yaml
 tests/            pytest, no model required
-fixtures/         synthetic invoices
+fixtures/
+  cjk_synthetic/  synthetic invoices: 5 languages x 3 templates x 4 tiers
+  multipage/      two-page PDFs with a text layer, total on page 2
 tools/
   fetch_llama_cpp.py   download + unzip the llama.cpp release
   smoke_engine.py      end-to-end check against a real model
   measure_tokens.py    real prompt/completion token counts per file
   bench_threads.py     thread-count benchmark, one server per setting
   bench_backends.py    prompt-vs-generation sweep: backends, devices, ngl, threads
+  gen_cjk_fixtures.py  regenerate the synthetic corpus (clean/scan/photo/hard)
+  gen_multipage_pdf.py build two-page PDF invoices from scratch, no dependency
+  check_multipage.py   read them back: are both pages there, is the total once
+  eval_ocr.py          OCR baseline + raw-vs-preprocessed gain table
+  fetch_public_fixtures.py  download the CORD v2 test split (100 receipts)
+  build_desktop.py     one-file Windows binary via PyInstaller
 ```
 
 ## Development
 
 ```bash
 pip install pytest
-python -m pytest               # 45 tests, all stubbed, no model download
+python -m pytest               # 102 tests, all stubbed, no model download
 python tools/smoke_engine.py  # needs the runtime + model
 python tools/measure_tokens.py  # real token counts, needs the model
 ```
+
+The OCR layer has its own measurements. The synthetic corpus needs an engine
+installed but no model and no network:
+
+```bash
+pip install rapidocr-onnxruntime onnxruntime
+python tools/gen_cjk_fixtures.py       # regenerate the 60-page corpus
+python tools/eval_ocr.py --prep both   # baseline + raw-vs-prepped gain table
+python tools/gen_multipage_pdf.py      # 5 two-page PDFs, text layer, no deps
+python tools/check_multipage.py        # both pages read, total appears once
+```
+
+The public corpus (CORD v2, 100 real receipts) needs the network once, to
+download the images it measures:
+
+```bash
+python tools/fetch_public_fixtures.py                          # ~15 MB
+python tools/eval_ocr.py --manifest fixtures/public/cord-v2/manifest.json --prep both
+```
+
+All of them write into `report/`, so a run leaves its evidence behind.

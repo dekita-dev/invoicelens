@@ -119,3 +119,15 @@ def test_parser_gpu_flags_parsed():
         ["scan", FIXTURES, "--n-gpu-layers", "26", "--device", "vulkan0"])
     assert args.n_gpu_layers == 26
     assert args.device == "vulkan0"
+
+
+def test_preprocessing_is_off_by_default():
+    # The default follows the measurement, not the other way round: on the
+    # 60-page corpus the pass improves character accuracy but moves no field
+    # the product reports, so it is opt-in. Pinned here because a silent
+    # default flip would change every user's output without a word.
+    parser = build_parser()
+    assert parser.parse_args(["scan", FIXTURES]).prep is False
+    assert parser.parse_args(["ocr", "x.png"]).prep is False
+    assert parser.parse_args(["scan", FIXTURES, "--prep"]).prep is True
+    assert parser.parse_args(["ocr", "x.png", "--prep"]).prep is True
